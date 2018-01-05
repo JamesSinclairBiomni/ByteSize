@@ -5,36 +5,44 @@
 `ByteSize` is to bytes what `System.TimeSpan` is to time.
 
 [![](https://travis-ci.org/omar/ByteSize.svg?branch=master)](https://travis-ci.org/omar/ByteSize)
+[![Stable nuget](https://img.shields.io/nuget/v/ByteSize.svg)](https://www.nuget.org/packages/ByteSize/)
 
-#### NuGet Package
-Command: `Install-Package ByteSize`
+#### Building
 
-URL: [nuget.org/packages/ByteSize](https://www.nuget.org/packages/ByteSize)
-
+* Windows: use Visual Studio
+* Mac OS X
+   * Install [Mono](http://www.mono-project.com/download/).
+     * NOTE: using `brew install mono` will not install the PCL libraries required to build the PCL compatible DLLs. The PCL libraries can be installed by running the installer downloaded from http://www.mono-project.com/download/. 
+   * Run `make build` in terminal.
+* Linux
+   * Install [Mono](http://www.mono-project.com/docs/getting-started/install/linux/) and the reference assemblies (`sudo apt-get referenceassemblies-pcl`).
+   * Run `make build` in terminal.
 
 ## Usage 
 
+`ByteSize` assumes `1 kilobyte` = `1024 bytes`. See [why here](http://omar.io/2017/01/16/when-technically-right-is-wrong-kilobytes.html).
+
 Without `ByteSize`:
 
-```
-public static readonly double MaxFileSizeMBs = 1.5;
+```c#
+static double MaxFileSizeMBs = 1.5;
 
 // I need it in KBs!
-var kilobytes = MaxFileSizeMBs * 1024;
+var kilobytes = MaxFileSizeMBs * 1024; // 1536
 ```
 
 With `ByteSize`:
 
-```
-public static readonly MaxFileSize = ByteSize.FromMegaBytes(1.5);
+```c#
+static MaxFileSize = ByteSize.FromMegaBytes(1.5);
 
 // I have it in KBs!
-MaxFileSize.KiloBytes;
+MaxFileSize.KiloBytes;  // 1536
 ```
 
 `ByeSize` behaves like any other struct backed by a numerical value.
 
-```
+```c#
 // Add
 var monthlyUsage = ByteSize.FromGigaBytes(10);
 var currentUsage = ByteSize.FromMegaBytes(512);
@@ -53,7 +61,7 @@ delta = delta.AddMegaBytes(-100);
 
 You can create a `ByteSize` object from `bits`, `bytes`, `kilobytes`, `megabytes`, `gigabytes`, and `terabytes`.
 
-```
+```c#
 new ByteSize(1.5);           // Constructor takes in bytes
 
 // Static Constructors
@@ -69,7 +77,7 @@ ByteSize.FromTeraBytes(1.5);
 
 A `ByteSize` object contains representations in `bits`, `bytes`, `kilobytes`, `megabytes`, `gigabytes`, and `terabytes`.
 
-```
+```c#
 var maxFileSize = ByteSize.FromKiloBytes(10);
 
 maxFileSize.Bits;      // 81920
@@ -82,7 +90,7 @@ maxFileSize.TeraBytes; // 9.31322575e-9
 
 A `ByteSize` object also contains two properties that represent the largest metric prefix symbol and value.
 
-```
+```c#
 var maxFileSize = ByteSize.FromKiloBytes(10);
 
 maxFileSize.LargestWholeNumberSymbol;  // "KB"
@@ -91,11 +99,13 @@ maxFileSize.LargestWholeNumberValue;   // 10
 
 ### String Representation
 
+All string operations are localized to use the number decimal separator of the culture set in `Thread.CurrentThread.CurrentCulture`.
+
 #### ToString
 
 `ByteSize` comes with a handy `ToString` method that uses the largest metric prefix whose value is greater than or equal to 1.
 
-```
+```c#
 ByteSize.FromBits(7).ToString();         // 7 b
 ByteSize.FromBits(8).ToString();         // 1 B
 ByteSize.FromKiloBytes(.5).ToString();   // 512 B
@@ -107,14 +117,16 @@ ByteSize.FromGigabytes(1024).ToString(); // 1 TB
 
 #### Formatting
 
-The `ToString` method accepts a single `string` parameter to format the output. The formatter can contain the symbol of the value to display: `b`, `B`, `KB`, `MB`, `GB`, `TB`. The formatter uses the built in [`double.ToString` method](http://msdn.microsoft.com/en-us/library/kfsatb94\(v=vs.110\).aspx). The default number format is `#.##` which rounds the number to two decimal places.
+The `ToString` method accepts a single `string` parameter to format the output. The formatter can contain the symbol of the value to display: `b`, `B`, `KB`, `MB`, `GB`, `TB`. The formatter uses the built in [`double.ToString` method](http://msdn.microsoft.com/en-us/library/kfsatb94\(v=vs.110\).aspx). 
+
+The default number format is `0.##` which rounds the number to two decimal places and outputs only `0` if the value is `0`.
 
 You can include symbol and number formats.
 
-```
+```c#
 var b = ByteSize.FromKiloBytes(10.505);
 
-// Default number format is #.##
+// Default number format is 0.##
 b.ToString("KB");         // 10.52 KB
 b.ToString("MB");         // .01 MB
 b.ToString("b");          // 86057 b
@@ -130,6 +142,12 @@ b.ToString("000.00");     // 010.51 KB
 b.ToString("#.#### MB");  // .0103 MB
 b.ToString("0.00 GB");    // 0 GB
 b.ToString("#.## B");     // 10757.12 B
+
+// ByteSize object of value 0
+var zeroBytes = ByteSize.FromKiloBytes(0); 
+zeroBytes.ToString();           // 0 b
+zeroBytes.ToString("0 kb");     // 0 kb
+zeroBytes.ToString("0.## mb");  // 0 mb
 ```
 
 #### Parsing
@@ -138,7 +156,7 @@ b.ToString("#.## B");     // 10757.12 B
 
 Like other `TryParse` methods, `ByteSize.TryParse` returns `boolean` value indicating whether or not the parsing was successful. If the value is parsed it is output to the `out` parameter supplied.
 
-```
+```c#
 ByteSize output;
 ByteSize.TryParse("1.5mb", out output);
 
@@ -160,13 +178,14 @@ ByteSize.Parse("1.55 gb");
 ByteSize.Parse("1.55 TB");
 ByteSize.Parse("1.55 tB");
 ByteSize.Parse("1.55 tb");
+ByteSize.Parse("1,55 kb"); // de-DE culture
 ```
 
 #### Author and License
 
 Omar Khudeira ([http://omar.io](http://omar.io))
 
-Copyright (c) 2013-2014 Omar Khudeira. All rights reserved.
+Copyright (c) 2013-2016 Omar Khudeira. All rights reserved.
 
 Released under MIT License (see LICENSE file).
 

@@ -38,3 +38,5 @@ src/packages/**
 *.resharper
 *.ncrunch*
 *.ndproj
+*.nupkg
+**/project.lock.json

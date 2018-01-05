@@ -8,7 +8,7 @@ namespace ByteSizeLib
     /// </summary>
     public struct ByteSize : IComparable<ByteSize>, IEquatable<ByteSize>
     {
-        public static readonly ByteSize MinValue = ByteSize.FromBits(long.MinValue);
+        public static readonly ByteSize MinValue = ByteSize.FromBits(0);
         public static readonly ByteSize MaxValue = ByteSize.FromBits(long.MaxValue);
 
         public const long BitsInByte = 8;
@@ -28,11 +28,11 @@ namespace ByteSizeLib
 
         public long Bits { get; private set; }
         public double Bytes { get; private set; }
-        public double KiloBytes { get; private set; }
-        public double MegaBytes { get; private set; }
-        public double GigaBytes { get; private set; }
-        public double TeraBytes { get; private set; }
-        public double PetaBytes { get; private set; }
+        public double KiloBytes => Bytes / BytesInKiloByte;
+        public double MegaBytes => Bytes / BytesInMegaByte;
+        public double GigaBytes => Bytes / BytesInGigaByte;
+        public double TeraBytes => Bytes / BytesInTeraByte;
+        public double PetaBytes => Bytes / BytesInPetaByte;
 
         public string LargestWholeNumberSymbol
         {
@@ -91,15 +91,10 @@ namespace ByteSizeLib
         public ByteSize(double byteSize)
             : this()
         {
-            // Get ceiling because bis are whole units
+            // Get ceiling because bits are whole units
             Bits = (long)Math.Ceiling(byteSize * BitsInByte);
 
             Bytes = byteSize;
-            KiloBytes = byteSize / BytesInKiloByte;
-            MegaBytes = byteSize / BytesInMegaByte;
-            GigaBytes = byteSize / BytesInGigaByte;
-            TeraBytes = byteSize / BytesInTeraByte;
-            PetaBytes = byteSize / BytesInPetaByte;
         }
 
         public static ByteSize FromBits(long value)
@@ -145,7 +140,7 @@ namespace ByteSizeLib
         /// </summary>
         public override string ToString()
         {
-            return this.ToString("#.##", CultureInfo.CurrentCulture);
+            return this.ToString("0.##", CultureInfo.CurrentCulture);
         }
 
         public string ToString(string format)
@@ -156,7 +151,7 @@ namespace ByteSizeLib
         public string ToString(string format, IFormatProvider provider)
         {
             if (!format.Contains("#") && !format.Contains("0"))
-                format = "#.## " + format;
+                format = "0.## " + format;
 
             if (provider == null) provider = CultureInfo.CurrentCulture;
 
@@ -273,6 +268,11 @@ namespace ByteSizeLib
             return new ByteSize(-b.Bytes);
         }
 
+        public static ByteSize operator -(ByteSize b1, ByteSize b2)
+        {
+            return new ByteSize(b1.Bytes - b2.Bytes);
+        }
+
         public static ByteSize operator --(ByteSize b)
         {
             return new ByteSize(b.Bytes - 1);
@@ -308,14 +308,16 @@ namespace ByteSizeLib
             return b1.Bits >= b2.Bits;
         }
 
-        public static bool TryParse(string s, out ByteSize result)
+        public static ByteSize Parse(string s)
         {
             // Arg checking
+#if NET35
+            if (string.IsNullOrEmpty(s) || s.Trim() == "")
+                throw new ArgumentNullException("s", "String is null or whitespace");
+#else
             if (string.IsNullOrWhiteSpace(s))
                 throw new ArgumentNullException("s", "String is null or whitespace");
-
-            // Setup the result
-            result = new ByteSize();
+#endif
 
             // Get the index of the first non-digit character
             s = s.TrimStart(); // Protect against leading spaces
@@ -323,16 +325,19 @@ namespace ByteSizeLib
             var num = 0;
             var found = false;
 
+            var decimalSeparator = Convert.ToChar(NumberFormatInfo.CurrentInfo.NumberDecimalSeparator);
+            var groupSeparator = Convert.ToChar(NumberFormatInfo.CurrentInfo.NumberGroupSeparator);
+
             // Pick first non-digit number
             for (num = 0; num < s.Length; num++)
-                if (!(char.IsDigit(s[num]) || s[num] == '.'))
+                if (!(char.IsDigit(s[num]) || s[num] == decimalSeparator || s[num] == groupSeparator))
                 {
                     found = true;
                     break;
                 }
 
             if (found == false)
-                return false;
+                throw new FormatException($"No byte indicator found in value '{ s }'.");
 
             int lastNumber = num;
 
@@ -342,65 +347,63 @@ namespace ByteSizeLib
 
             // Get the numeric part
             double number;
-            if (!double.TryParse(numberPart, NumberStyles.Float | NumberStyles.AllowThousands, NumberFormatInfo.InvariantInfo, out number))
-                return false;
+            if (!double.TryParse(numberPart, NumberStyles.Float | NumberStyles.AllowThousands, NumberFormatInfo.CurrentInfo, out number))
+                throw new FormatException($"No number found in value '{ s }'.");
 
             // Get the magnitude part
             switch (sizePart)
             {
                 case "b":
                     if (number % 1 != 0) // Can't have partial bits
-                        return false;
+                        throw new FormatException($"Can't have partial bits for value '{ s }'.");
 
-                    result = FromBits((long)number);
-                    break;
+                    return FromBits((long)number);
 
                 case "B":
-                    result = FromBytes(number);
-                    break;
+                    return FromBytes(number);
 
                 case "KB":
                 case "kB":
                 case "kb":
-                    result = FromKiloBytes(number);
-                    break;
+                    return FromKiloBytes(number);
 
                 case "MB":
                 case "mB":
                 case "mb":
-                    result = FromMegaBytes(number);
-                    break;
+                    return FromMegaBytes(number);
 
                 case "GB":
                 case "gB":
                 case "gb":
-                    result = FromGigaBytes(number);
-                    break;
+                    return FromGigaBytes(number);
 
                 case "TB":
                 case "tB":
                 case "tb":
-                    result = FromTeraBytes(number);
-                    break;
+                    return FromTeraBytes(number);
 
                 case "PB":
                 case "pB":
                 case "pb":
-                    result = FromPetaBytes(number);
-                    break;
+                    return FromPetaBytes(number);
+                
+                default:
+                    throw new FormatException($"Bytes of magnitude '{ sizePart }' is not supported.");
             }
-
-            return true;
         }
 
-        public static ByteSize Parse(string s)
+        public static bool TryParse(string s, out ByteSize result)
         {
-            ByteSize result;
-
-            if (TryParse(s, out result))
-                return result;
-
-            throw new FormatException("Value is not in the correct format");
+            try 
+            {
+                result = Parse(s);
+                return true;
+            }
+            catch
+            {
+                result = new ByteSize();
+                return false;
+            }
         }
     }
 }

@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Globalization;
+using System.Threading;
 using Xunit;
 
 namespace ByteSizeLib.Tests
@@ -199,6 +201,20 @@ namespace ByteSizeLib.Tests
             var result = ByteSize.Parse(val);
 
             Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void ParseCultureNumberSeparator()
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            string val = "1.500,5 MB";
+            var expected = ByteSize.FromMegaBytes(1500.5);
+
+            var result = ByteSize.Parse(val);
+
+            Assert.Equal(expected, result);
+            
+            CultureInfo.CurrentCulture = new CultureInfo("en-US");
         }
     }
 }
